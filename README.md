@@ -29,3 +29,19 @@ Add the following environment variable to your game or launcher settings:
 
 #### Note:
 The fix above should work with any SDL controller like Pro Controllers, DualShock, DualSense, etc...
+
+
+# How to build
+First and foremost install the dependencies listed here: https://github.com/Electronicks/JoyShockMapper?tab=readme-ov-file#linux-specific-notes
+
+• Clone the repo using: `git clone https://github.com/CoderMaximus/JoyShockMapper-linux.git`
+
+• Enter the directory: `cd JoyShockMapper-linux`
+
+• Create the build folder and enter it: `mkdir build && cd build`
+
+• Set compiler to `clang++` instead of `gcc`: `cmake .. -DCMAKE_CXX_COMPILER=clang++`, note that this command might take some time.
+
+• Build: `make` or `make -j$(nproc)` to utilize all CPU cores
+
+All done!, the app will be located in `JoyShockMapper-linux/build/JoyShockMapper` as `JoyShockMapper`
