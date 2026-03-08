@@ -1,0 +1,864 @@
+#include "InputHelpers.h"
+
+#include <array>
+#include <atomic>
+#include <cmath>
+#include <cstring>
+#include <functional>
+#include <string>
+#include <thread>
+#include <vector>
+#include <memory>
+#include <iostream>
+
+#include <libevdev/libevdev-uinput.h>
+#include <fcntl.h>
+
+#include <dirent.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+
+#include <queue>
+#include <mutex>
+#include <condition_variable>
+
+std::queue<Command> commandQueue;
+std::mutex commandQueueMutex;
+std::condition_variable commandQueueCV;
+#include <termios.h>
+#include <dlfcn.h>
+
+using WORD = unsigned short;
+using DWORD = unsigned long;
+
+using X11Window = unsigned long;
+using X11Atom = unsigned long;
+
+#define UINPUT_DEVICE "/dev/uinput"
+
+static void *X11Display{ nullptr };
+static X11Atom _NET_WM_PID{ 0 };
+
+static void *(*XOpenDisplay)(const char *);
+static int (*XGetInputFocus)(void *, X11Window *, int *);
+static int (*XFetchName)(void *, X11Window, char **);
+static X11Atom (*XInternAtom)(void *, const char *, int);
+static int (*XGetWindowProperty)(void *, X11Window, X11Atom, long, long, int, X11Atom, X11Atom *, int *, unsigned long *, unsigned long *, unsigned char **);
+static int (*XFree)(void *);
+
+// Windows' mouse speed settings translate non-linearly to speed.
+// Thankfully, the mappings are available here:
+// https://liquipedia.net/counterstrike/Mouse_settings#Windows_Sensitivity
+static float windowsSensitivityMappings[] = { 0.0, // mouse sensitivity range is 1-20, so just put
+												   // nothing in the 0th element
+	1.0 / 32.0,
+	1.0 / 16.0,
+	1.0 / 8.0,
+	2.0 / 8.0,
+	3.0 / 8.0,
+	4.0 / 8.0,
+	5.0 / 8.0,
+	6.0 / 8.0,
+	7.0 / 8.0,
+	1.0,
+	1.25,
+	1.5,
+	1.75,
+	2.0,
+	2.25,
+	2.5,
+	2.75,
+	3.0,
+	3.25,
+	3.5 };
+
+class VirtualInputDevice
+{
+private:
+	constexpr auto windows_key_to_evdev_key(WORD key) noexcept
+	{
+		switch (key)
+		{
+		case '0':
+			return KEY_0;
+		case '1':
+			return KEY_1;
+		case '2':
+			return KEY_2;
+		case '3':
+			return KEY_3;
+		case '4':
+			return KEY_4;
+		case '5':
+			return KEY_5;
+		case '6':
+			return KEY_6;
+		case '7':
+			return KEY_7;
+		case '8':
+			return KEY_8;
+		case '9':
+			return KEY_9;
+		case 'A':
+			return KEY_A;
+		case 'B':
+			return KEY_B;
+		case 'C':
+			return KEY_C;
+		case 'D':
+			return KEY_D;
+		case 'E':
+			return KEY_E;
+		case 'F':
+			return KEY_F;
+		case 'G':
+			return KEY_G;
+		case 'H':
+			return KEY_H;
+		case 'I':
+			return KEY_I;
+		case 'J':
+			return KEY_J;
+		case 'K':
+			return KEY_K;
+		case 'L':
+			return KEY_L;
+		case 'M':
+			return KEY_M;
+		case 'N':
+			return KEY_N;
+		case 'O':
+			return KEY_O;
+		case 'P':
+			return KEY_P;
+		case 'Q':
+			return KEY_Q;
+		case 'R':
+			return KEY_R;
+		case 'S':
+			return KEY_S;
+		case 'T':
+			return KEY_T;
+		case 'U':
+			return KEY_U;
+		case 'V':
+			return KEY_V;
+		case 'W':
+			return KEY_W;
+		case 'X':
+			return KEY_X;
+		case 'Y':
+			return KEY_Y;
+		case 'Z':
+			return KEY_Z;
+		case VK_OEM_PLUS:
+			return KEY_EQUAL;
+		case VK_OEM_MINUS:
+			return KEY_MINUS;
+		case VK_OEM_COMMA:
+			return KEY_COMMA;
+		case VK_OEM_PERIOD:
+			return KEY_DOT;
+		case VK_OEM_1:
+			return KEY_SEMICOLON;
+		case VK_OEM_2:
+			return KEY_SLASH;
+		case VK_OEM_3:
+			return KEY_GRAVE;
+		case VK_OEM_4:
+			return KEY_LEFTBRACE;
+		case VK_OEM_5:
+			return KEY_BACKSLASH;
+		case VK_OEM_6:
+			return KEY_RIGHTBRACE;
+		case VK_OEM_7:
+			return KEY_APOSTROPHE;
+		case VK_F1:
+			return KEY_F1;
+		case VK_F2:
+			return KEY_F2;
+		case VK_F3:
+			return KEY_F3;
+		case VK_F4:
+			return KEY_F4;
+		case VK_F5:
+			return KEY_F5;
+		case VK_F6:
+			return KEY_F6;
+		case VK_F7:
+			return KEY_F7;
+		case VK_F8:
+			return KEY_F8;
+		case VK_F9:
+			return KEY_F9;
+		case VK_F10:
+			return KEY_F10;
+		case VK_F11:
+			return KEY_F11;
+		case VK_F12:
+			return KEY_F12;
+		case VK_F13:
+			return KEY_F13;
+		case VK_F14:
+			return KEY_F14;
+		case VK_F15:
+			return KEY_F15;
+		case VK_F16:
+			return KEY_F16;
+		case VK_F17:
+			return KEY_F17;
+		case VK_F18:
+			return KEY_F18;
+		case VK_F19:
+			return KEY_F19;
+		case VK_NUMPAD0:
+			return KEY_NUMERIC_0;
+		case VK_NUMPAD1:
+			return KEY_NUMERIC_1;
+		case VK_NUMPAD2:
+			return KEY_NUMERIC_2;
+		case VK_NUMPAD3:
+			return KEY_NUMERIC_3;
+		case VK_NUMPAD4:
+			return KEY_NUMERIC_4;
+		case VK_NUMPAD5:
+			return KEY_NUMERIC_5;
+		case VK_NUMPAD6:
+			return KEY_NUMERIC_6;
+		case VK_NUMPAD7:
+			return KEY_NUMERIC_7;
+		case VK_NUMPAD8:
+			return KEY_NUMERIC_8;
+		case VK_NUMPAD9:
+			return KEY_NUMERIC_9;
+		case VK_LEFT:
+			return KEY_LEFT;
+		case VK_RIGHT:
+			return KEY_RIGHT;
+		case VK_UP:
+			return KEY_UP;
+		case VK_DOWN:
+			return KEY_DOWN;
+		case VK_SPACE:
+			return KEY_SPACE;
+		case VK_CONTROL:
+			return KEY_LEFTCTRL;
+		case VK_LCONTROL:
+			return KEY_LEFTCTRL;
+		case VK_RCONTROL:
+			return KEY_RIGHTCTRL;
+		case VK_SHIFT:
+			return KEY_LEFTSHIFT;
+		case VK_LSHIFT:
+			return KEY_LEFTSHIFT;
+		case VK_RSHIFT:
+			return KEY_RIGHTSHIFT;
+		case VK_MENU:
+			return KEY_MENU;
+		case VK_LMENU:
+			return KEY_LEFTALT;
+		case VK_RMENU:
+			return KEY_RIGHTALT;
+		case VK_TAB:
+			return KEY_TAB;
+		case VK_RETURN:
+			return KEY_ENTER;
+		case VK_ESCAPE:
+			return KEY_ESC;
+		case VK_PRIOR:
+			return KEY_PAGEUP;
+		case VK_NEXT:
+			return KEY_PAGEDOWN;
+		case VK_HOME:
+			return KEY_HOME;
+		case VK_END:
+			return KEY_END;
+		case VK_INSERT:
+			return KEY_INSERT;
+		case VK_DELETE:
+			return KEY_DELETE;
+		case VK_LBUTTON:
+			return BTN_LEFT;
+		case VK_RBUTTON:
+			return BTN_RIGHT;
+		case VK_MBUTTON:
+			return BTN_MIDDLE;
+		case VK_XBUTTON1:
+			return BTN_SIDE;
+		case VK_XBUTTON2:
+			return BTN_EXTRA;
+		case V_WHEEL_DOWN:
+			return static_cast<decltype(KEY_0)>(V_WHEEL_DOWN);
+		case V_WHEEL_UP:
+			return static_cast<decltype(KEY_0)>(V_WHEEL_UP);
+		case VK_BACK:
+			return KEY_BACKSPACE;
+    case VK_LWIN:
+      return KEY_LEFTMETA;
+    case VK_RWIN:
+      return KEY_RIGHTMETA;
+    case VK_APPS:
+      return KEY_COMPOSE;
+    case VK_SNAPSHOT:
+      return KEY_SYSRQ;
+			//		case NO_HOLD_MAPPED: return NO_HOLD_MAPPED;
+			//		case CALIBRATE: return CALIBRATE;
+			//		case GYRO_INV_X: return GYRO_INV_X;
+			//		case GYRO_INV_Y: return GYRO_INV_Y;
+			//		case GYRO_INVERT: return GYRO_INVERT;
+			//		case GYRO_ON_BIND: return GYRO_ON_BIND;
+			//		case GYRO_OFF_BIND: return GYRO_OFF_BIND;
+		default:
+			return 0x00;
+		}
+	}
+
+public:
+	enum class Device
+	{
+		MOUSE,
+		KEYBOARD
+	};
+
+public:
+	VirtualInputDevice(Device device)
+	  : device_{ libevdev_new() }
+	{
+		if (device == Device::MOUSE)
+		{
+			libevdev_set_name(device_, APPLICATION_NAME "_MOUSE");
+
+			libevdev_enable_event_type(device_, EV_REL);
+			libevdev_enable_event_code(device_, EV_REL, REL_X, nullptr);
+			libevdev_enable_event_code(device_, EV_REL, REL_Y, nullptr);
+			libevdev_enable_event_code(device_, EV_REL, REL_WHEEL, nullptr);
+
+			libevdev_enable_event_type(device_, EV_ABS);
+			libevdev_enable_event_code(device_, EV_ABS, ABS_X, nullptr);
+			libevdev_enable_event_code(device_, EV_ABS, ABS_Y, nullptr);
+
+			libevdev_enable_event_type(device_, EV_KEY);
+			libevdev_enable_event_code(device_, EV_KEY, BTN_LEFT, nullptr);
+			libevdev_enable_event_code(device_, EV_KEY, BTN_MIDDLE, nullptr);
+			libevdev_enable_event_code(device_, EV_KEY, BTN_RIGHT, nullptr);
+		}
+		else
+		{
+			libevdev_set_name(device_, APPLICATION_NAME "_KEYBOARD");
+			libevdev_enable_event_type(device_, EV_KEY);
+			for (std::uint32_t i = 0; i < 250; ++i)
+			{
+				libevdev_enable_event_code(device_, EV_KEY, i, nullptr);
+			}
+		}
+
+		const auto error = libevdev_uinput_create_from_device(device_,
+		  LIBEVDEV_UINPUT_OPEN_MANAGED,
+		  &uinput_device_);
+		if (error != 0)
+		{
+			throw std::runtime_error(
+				std::string("Failed to create virtual device: ") +
+				std::strerror(-error) + std::string("\n"));
+		}
+	}
+
+	~VirtualInputDevice() noexcept
+	{
+		libevdev_uinput_destroy(uinput_device_);
+		libevdev_free(device_);
+	}
+
+public:
+	void press_key(WORD key) noexcept
+	{
+		auto error =
+		  libevdev_uinput_write_event(uinput_device_, EV_KEY, windows_key_to_evdev_key(key), 1);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate key press: %s\n", std::strerror(-error));
+			return;
+		}
+
+		error = libevdev_uinput_write_event(uinput_device_, EV_SYN, SYN_REPORT, 0);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate key press: %s\n", std::strerror(-error));
+			return;
+		}
+	}
+
+	void release_key(WORD key) noexcept
+	{
+		auto error =
+		  libevdev_uinput_write_event(uinput_device_, EV_KEY, windows_key_to_evdev_key(key), 0);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate key release: %s\n", std::strerror(-error));
+			return;
+		}
+
+		error = libevdev_uinput_write_event(uinput_device_, EV_SYN, SYN_REPORT, 0);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate key release: %s\n", std::strerror(-error));
+			return;
+		}
+	}
+
+	void click_key(WORD key) noexcept
+	{
+		press_key(key);
+		release_key(key);
+	}
+
+	void mouse_move_relative(std::int32_t x, std::int32_t y) noexcept
+	{
+		auto error = libevdev_uinput_write_event(uinput_device_, EV_REL, REL_X, x);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse move: %s\n", std::strerror(-error));
+			return;
+		}
+
+		error = libevdev_uinput_write_event(uinput_device_, EV_REL, REL_Y, y);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse move: %s\n", std::strerror(-error));
+			return;
+		}
+
+		error = libevdev_uinput_write_event(uinput_device_, EV_SYN, SYN_REPORT, 0);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse move: %s\n", std::strerror(-error));
+			return;
+		}
+	}
+
+	void mouse_move_absolute(std::int32_t x, std::int32_t y) noexcept
+	{
+		auto error = libevdev_uinput_write_event(uinput_device_, EV_ABS, ABS_X, x);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse move: %s\n", std::strerror(-error));
+			return;
+		}
+
+		error = libevdev_uinput_write_event(uinput_device_, EV_ABS, ABS_Y, y);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse move: %s\n", std::strerror(-error));
+			return;
+		}
+
+		error = libevdev_uinput_write_event(uinput_device_, EV_SYN, SYN_REPORT, 0);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse move: %s\n", std::strerror(-error));
+			return;
+		}
+	}
+
+	void mouse_scroll(std::int32_t amount) noexcept
+	{
+		auto error = libevdev_uinput_write_event(uinput_device_, EV_REL, REL_WHEEL, amount);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse scroll: %s\n", std::strerror(-error));
+			return;
+		}
+
+		error = libevdev_uinput_write_event(uinput_device_, EV_SYN, SYN_REPORT, 0);
+		if (error != 0)
+		{
+			std::fprintf(stderr, "Failed to to simulate mouse move: %s\n", std::strerror(-error));
+			return;
+		}
+	}
+
+private:
+	libevdev *device_;
+	libevdev_uinput *uinput_device_{ nullptr };
+};
+
+// get the user's mouse sensitivity multiplier from the user. In Windows it's an int, but who cares?
+// it's well within range for float to represent it exactly also, if this is ported to other
+// platforms, we might want non-integer sensitivities
+float getMouseSpeed()
+{
+	return 1.0;
+}
+
+namespace
+{
+VirtualInputDevice mouse{ VirtualInputDevice::Device::MOUSE };
+VirtualInputDevice keyboard{ VirtualInputDevice::Device::KEYBOARD };
+} // namespace
+
+// send mouse button
+int pressMouse(WORD vkKey, bool isPressed)
+{
+	if (vkKey == V_WHEEL_UP)
+	{
+		if (isPressed)
+		{
+			mouse.mouse_scroll(1);
+		}
+
+		return 0;
+	}
+
+	if (vkKey == V_WHEEL_DOWN)
+	{
+		if (isPressed)
+		{
+			mouse.mouse_scroll(-1);
+		}
+
+		return 0;
+	}
+
+	if (isPressed)
+	{
+		mouse.press_key(vkKey);
+	}
+	else
+	{
+		mouse.release_key(vkKey);
+	}
+
+	return 0;
+}
+
+// send key press
+int pressKey(KeyCode vkKey, bool pressed)
+{
+	if (vkKey.code == 0)
+		return 0;
+	if (vkKey.code <= V_WHEEL_DOWN)
+	{
+		// Highest mouse ID
+		return pressMouse(vkKey.code, pressed);
+	}
+
+	if (pressed)
+	{
+		keyboard.press_key(vkKey.code);
+	}
+	else
+	{
+		keyboard.release_key(vkKey.code);
+	}
+
+	return 0;
+}
+
+float accumulatedX = 0;
+float accumulatedY = 0;
+
+void moveMouse(float x, float y)
+{
+	accumulatedX += x;
+	accumulatedY += y;
+
+	int applicableX = (int)accumulatedX;
+	int applicableY = (int)accumulatedY;
+
+	accumulatedX -= applicableX;
+	accumulatedY -= applicableY;
+
+	mouse.mouse_move_relative(applicableX, applicableY);
+	// printf("%0.4f %0.4f\n", accumulatedX, accumulatedY);
+}
+
+void setMouseNorm(float x, float y)
+{
+	mouse.mouse_move_absolute(std::roundf(65535.0f * x), std::roundf(65535.0f * y));
+}
+
+bool WriteToConsole(string_view command)
+{
+	std::lock_guard<std::mutex> lock(commandQueueMutex);
+	commandQueue.push(Command{std::string(command), CommandSource::INTERNAL});
+	commandQueueCV.notify_one();
+	return true;
+}
+
+BOOL ConsoleCtrlHandler(DWORD)
+{
+	return false;
+};
+
+// just setting up the console with standard stuff
+void initConsole(std::function<void()>)
+{
+	static std::thread consoleForwardThread([](){
+		std::cout << "[DEBUG] consoleForwardThread started" << std::endl;
+		std::string line;
+		while (true)
+		{
+			if (!std::getline(std::cin, line))
+			{
+				std::cout << "[DEBUG] consoleForwardThread: EOF or error on cin" << std::endl;
+				break;
+			}
+
+			std::cout << "[DEBUG] consoleForwardThread: read line from cin: " << line << std::endl;
+
+			// Forward input to input_pipe_fd[1], mimicking WriteToConsole
+			{
+				std::lock_guard<std::mutex> lock(commandQueueMutex);
+				commandQueue.push(Command{line, CommandSource::CONSOLE});
+				commandQueueCV.notify_one();
+			}
+		}
+		std::cout << "[DEBUG] consoleForwardThread exiting" << std::endl;
+	});
+}
+
+std::tuple<std::string, std::string> GetActiveWindowName()
+{
+	if (X11Display == nullptr)
+	{
+		static auto *libX11 = ::dlopen("libX11.so", RTLD_LAZY);
+
+		if (libX11)
+		{
+			XOpenDisplay = reinterpret_cast<decltype(XOpenDisplay)>(::dlsym(libX11, "XOpenDisplay"));
+			XGetInputFocus = reinterpret_cast<decltype(XGetInputFocus)>(::dlsym(libX11, "XGetInputFocus"));
+			XFetchName = reinterpret_cast<decltype(XFetchName)>(::dlsym(libX11, "XFetchName"));
+			XInternAtom = reinterpret_cast<decltype(XInternAtom)>(::dlsym(libX11, "XInternAtom"));
+			XGetWindowProperty = reinterpret_cast<decltype(XGetWindowProperty)>(::dlsym(libX11, "XGetWindowProperty"));
+			XFree = reinterpret_cast<decltype(XFree)>(::dlsym(libX11, "XFree"));
+
+			X11Display = XOpenDisplay(nullptr);
+			_NET_WM_PID = XInternAtom(X11Display, "_NET_WM_PID", true);
+		}
+	}
+
+	std::tuple<std::string, std::string> result;
+
+	if (X11Display != nullptr)
+	{
+		constexpr std::size_t MAX_PATH{ 256 };
+		X11Window focusedWindow;
+		char *focusedWindowName = nullptr;
+		unsigned char *processPID = nullptr;
+		char focusedWindowExecutableName[MAX_PATH];
+		int revert;
+
+		focusedWindowExecutableName[0] = '\0';
+		XGetInputFocus(X11Display, &focusedWindow, &revert);
+		if (focusedWindow > 0)
+		{
+			XFetchName(X11Display, focusedWindow, &focusedWindowName);
+
+			X11Atom type;
+			int format;
+			unsigned long itemCount;
+			unsigned long bytesAfter;
+
+			XGetWindowProperty(X11Display, focusedWindow, _NET_WM_PID, 0, 1, false, 0, &type, &format, &itemCount, &bytesAfter, &processPID);
+			if (processPID != nullptr)
+			{
+				const auto pid = *reinterpret_cast<unsigned long *>(processPID);
+				XFree(processPID);
+
+				std::snprintf(focusedWindowExecutableName, MAX_PATH, "/proc/%lu/comm", pid);
+				std::unique_ptr<FILE, decltype(&std::fclose)> cmd{ std::fopen(focusedWindowExecutableName, "r"), &std::fclose };
+				std::memset(focusedWindowExecutableName, 0, MAX_PATH);
+				if (cmd != nullptr)
+				{
+					const auto bytesRead = std::fread(focusedWindowExecutableName, sizeof(char), MAX_PATH, cmd.get());
+					if (bytesRead > 0)
+					{
+						if (focusedWindowExecutableName[bytesRead - 1] == '\n')
+						{
+							focusedWindowExecutableName[bytesRead - 1] = '\0';
+						}
+					}
+				}
+			}
+		}
+
+		std::get<0>(result) = focusedWindowExecutableName;
+
+		if (focusedWindowName != nullptr)
+		{
+			std::get<1>(result) = focusedWindowName;
+			XFree(focusedWindowName);
+		}
+	}
+
+	return result;
+}
+
+std::vector<std::string> ListDirectory(std::string directory)
+{
+	std::vector<std::string> fileListing;
+
+	dirent **entries;
+	auto entryCount = ::scandir(directory.c_str(), &entries, nullptr, &::alphasort);
+
+	if (entryCount <= 0)
+	{
+		return fileListing;
+	}
+
+	fileListing.reserve(entryCount);
+
+	while (entryCount--)
+	{
+		const auto entry = entries[entryCount];
+		if (entry->d_type == DT_REG)
+		{
+			fileListing.emplace_back(entry->d_name);
+		}
+	}
+
+	return fileListing;
+}
+
+std::string GetCWD()
+{
+	std::unique_ptr<char, decltype(&std::free)> pathBuffer{ getcwd(nullptr, 0), &std::free };
+	return pathBuffer.get();
+}
+
+bool SetCWD(string_view newCWD) {
+    return chdir(newCWD.data()) != 0;
+}
+
+DWORD ShowOnlineHelp()
+{
+	::system("xdg-open https://github.com/JibbSmart/JoyShockMapper/blob/master/README.md");
+	return 0;
+}
+
+void HideConsole()
+{
+}
+
+void ShowConsole()
+{
+}
+void initConsole() {
+	static std::thread ttyForwardThread([](){
+		FILE* tty = fopen("/dev/tty", "r");
+		if (!tty) {
+			perror("fopen /dev/tty");
+			return;
+		}
+		char* lineptr = nullptr;
+		size_t n = 0;
+		while (true) {
+			ssize_t read = getline(&lineptr, &n, tty);
+			if (read == -1) {
+				break;
+			}
+
+			{
+				std::lock_guard<std::mutex> lock(commandQueueMutex);
+				commandQueue.push(Command{std::string(lineptr, read), CommandSource::CONSOLE});
+				commandQueueCV.notify_one();
+			}
+		}
+		free(lineptr);
+		fclose(tty);
+	});
+}
+
+bool ClearConsole() {
+    return true;
+}
+
+void ReleaseConsole()
+{
+}
+
+void UnhideConsole() {
+
+}
+
+void initFifoCommandListener()
+{
+    // Check if FIFO exists, create if missing
+    const char* fifo_path = "/tmp/jsm_command_fifo";
+    if (access(fifo_path, F_OK) == -1) {
+        if (mkfifo(fifo_path, 0666) != 0) {
+            perror("mkfifo");
+            return;
+        }
+    }
+
+    std::thread([](){
+        const char* fifo_path = "/tmp/jsm_command_fifo";
+
+        int fifo_read_fd = open(fifo_path, O_RDONLY | O_NONBLOCK);
+        printf("[FIFO] Opened FIFO for reading (fd=%d)\n", fifo_read_fd);
+        if (fifo_read_fd < 0) {
+            perror("open fifo for reading");
+            return;
+        }
+
+        // Open dummy write FD to keep FIFO open and avoid EOF
+        int fifo_write_fd = open(fifo_path, O_WRONLY);
+        if (fifo_write_fd < 0) {
+            perror("open fifo for writing");
+            // Still proceed, but echo may block if no other writers
+        } else {
+            printf("[FIFO] Dummy writer opened (fd=%d)\n", fifo_write_fd);
+        }
+
+        FILE* fifo_file = fdopen(fifo_read_fd, "r");
+        if (!fifo_file) {
+            perror("fdopen fifo");
+            close(fifo_read_fd);
+            if (fifo_write_fd >= 0) close(fifo_write_fd);
+            return;
+        }
+
+        while (true) {
+            char* lineptr = nullptr;
+            size_t n = 0;
+            ssize_t read_len = getline(&lineptr, &n, fifo_file);
+            if (read_len == -1) {
+                free(lineptr);
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                clearerr(fifo_file);
+                continue;
+            }
+
+            std::string line(lineptr, read_len);
+            free(lineptr);
+
+            // Remove trailing newline
+            if (!line.empty() && line.back() == '\n') {
+                line.pop_back();
+            }
+
+            printf("%s\n", line.c_str());
+
+            {
+                std::lock_guard<std::mutex> lock(commandQueueMutex);
+                commandQueue.push(Command{line, CommandSource::FIFO});
+                commandQueueCV.notify_one();
+            }
+        }
+
+        fclose(fifo_file);
+        if (fifo_write_fd >= 0) close(fifo_write_fd);
+    }).detach();
+}
+bool IsVisible()
+{
+	return true;
+}
+
+bool isConsoleMinimized()
+{
+	return false;
+}

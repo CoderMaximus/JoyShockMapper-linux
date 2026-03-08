@@ -1047,7 +1047,6 @@ DigitalButton::Context::Context(Gamepad::Callback virtualControllerCallback, sha
   : rightMainMotion(mainMotion)
 {
 	chordStack.push_front(ButtonID::NONE); // Always hold mapping none at the end to _handle modeshifts and chords
-#ifdef _WIN32
 	auto virtual_controller = SettingsManager::getV<ControllerScheme>(SettingID::VIRTUAL_CONTROLLER);
 	if (virtual_controller->value() != ControllerScheme::NONE)
 	{
@@ -1062,5 +1061,4 @@ DigitalButton::Context::Context(Gamepad::Callback virtualControllerCallback, sha
 			CERR << error << '\n';
 		}
 	}
-#endif
 }

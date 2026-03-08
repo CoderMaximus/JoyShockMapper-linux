@@ -1,0 +1,71 @@
+#include "Gamepad.h"
+
+size_t Gamepad::_count = 0;
+
+Gamepad::Gamepad()
+{
+	++_count;
+}
+
+Gamepad::~Gamepad()
+{
+	--_count;
+}
+
+
+class GamepadImpl : public Gamepad
+{
+public:
+	// TODO: Implement this class by interacting with some external virtual controller software
+
+	GamepadImpl()
+	{
+
+	}
+
+	virtual ~GamepadImpl()
+	{
+
+	}
+
+    // is not overriding anything? removed override from function
+	virtual bool isInitialized(std::string* errorMsg = nullptr) {
+
+	}
+
+	virtual void setButton(KeyCode btn, bool pressed) override
+	{
+
+	}
+
+	virtual void setLeftStick(float x, float y) override
+	{
+
+	}
+
+	virtual void setRightStick(float x, float y) override
+	{
+
+	}
+
+	virtual void setLeftTrigger(float) override
+	{
+
+	}
+
+	virtual void setRightTrigger(float) override
+	{
+	
+	}
+
+	virtual void update() override
+	{
+
+	}
+};
+
+Gamepad *Gamepad::getNew(ControllerScheme scheme, Callback notification)
+{
+	// return new GamepadImpl();
+	return nullptr;
+}

@@ -206,12 +206,12 @@ public:
 		}
 		return chord != ButtonID::INVALID ? optional(Base::_value) : nullopt;
 	}
-	virtual operator T() const
+	virtual operator T() const override
 	{
 		return Base::value();
 	}
 
-	virtual const T &value() const
+	virtual const T &value() const override
 	{
 		return Base::value();
 	}

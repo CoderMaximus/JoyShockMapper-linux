@@ -1,6 +1,8 @@
 #include "linux/StatusNotifierItem.h"
 
 #include <cstring>
+#include <iostream>
+#include <future>
 #include <libappindicator/app-indicator.h>
 
 
@@ -11,45 +13,58 @@ TrayIcon *TrayIcon::getNew(TrayIconData applicationName, std::function<void()> &
 
 
 StatusNotifierItem::StatusNotifierItem(TrayIconData, std::function<void()> &&beforeShow)
-  : thread_{ [this, &beforeShow] {
-	  int argc = 0;
-	  gtk_init(&argc, nullptr);
-
-	  std::string iconPath{};
-	  const auto APPDIR = ::getenv("APPDIR");
-	  if (APPDIR != nullptr)
-	  {
-		  iconPath = APPDIR;
-		  iconPath += "/usr/share/icons/hicolor/24x24/status/jsm-status-dark.svg";
-		  gtk_icon_theme_prepend_search_path(gtk_icon_theme_get_default(), iconPath.c_str());
-	  }
-	  else
-	  {
-		  iconPath = "jsm-status-dark";
-	  }
-
-	  menu_ = std::unique_ptr<GtkMenu, decltype(&::g_object_unref)>{ GTK_MENU(gtk_menu_new()), &g_object_unref };
-
-	  indicator_ = app_indicator_new(APPLICATION_RDN APPLICATION_NAME, iconPath.c_str(), APP_INDICATOR_CATEGORY_APPLICATION_STATUS);
-	  app_indicator_set_status(indicator_, APP_INDICATOR_STATUS_ACTIVE);
-	  app_indicator_set_menu(indicator_, menu_.get());
-
-	  beforeShow();
-
-	  gtk_main();
-  } }
 {
+	// Start the GTK thread - capture beforeShow by value to avoid dangling reference
+	thread_ = std::thread([this, beforeShow = std::move(beforeShow)] {
+		int argc = 0;
+		if (!gtk_init_check(&argc, nullptr))
+		{
+			// GTK initialization failed - cannot create tray icon
+			// Just exit the thread silently
+			return;
+		}
+
+		std::string iconPath{};
+		const auto APPDIR = ::getenv("APPDIR");
+		if (APPDIR != nullptr)
+		{
+			iconPath = APPDIR;
+			iconPath += "/usr/share/icons/hicolor/24x24/status/jsm-status-dark.svg";
+			gtk_icon_theme_prepend_search_path(gtk_icon_theme_get_default(), iconPath.c_str());
+		}
+		else
+		{
+			iconPath = "jsm-status-dark";
+		}
+
+		menu_ = std::unique_ptr<GtkMenu, decltype(&::g_object_unref)>{ GTK_MENU(gtk_menu_new()), &g_object_unref };
+
+		indicator_ = app_indicator_new(APPLICATION_RDN APPLICATION_NAME, iconPath.c_str(), APP_INDICATOR_CATEGORY_APPLICATION_STATUS);
+		app_indicator_set_status(indicator_, APP_INDICATOR_STATUS_ACTIVE);
+		app_indicator_set_menu(indicator_, menu_.get());
+
+		beforeShow();
+
+		gtk_main();
+	});
 }
 
 StatusNotifierItem::~StatusNotifierItem()
 {
-	g_idle_add([](void *) -> int {
-		gtk_main_quit();
-		return false;
-	},
-	  this);
+	if (thread_.joinable())
+	{
+		// Request GTK to quit
+		g_idle_add([](void *) -> int {
+			gtk_main_quit();
+			return false;
+		},
+		  this);
 
-	thread_.join();
+		// Detach the thread instead of joining to avoid blocking on GTK shutdown
+		// This prevents std::terminate() from being called if the thread can't be joined cleanly
+		// The GTK thread will exit on its own when gtk_main() returns
+		thread_.detach();
+	}
 }
 
 bool StatusNotifierItem::Show()

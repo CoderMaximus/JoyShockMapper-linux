@@ -356,13 +356,13 @@ public:
 	void setLeftStick(float x, float y) override
 	{
 		_stateX360.sThumbLX = clamp(int(_stateX360.sThumbLX + SHRT_MAX * clamp(x, -1.f, 1.f)), SHRT_MIN, SHRT_MAX);
-		_stateX360.sThumbLY = clamp(int(_stateX360.sThumbLY + SHRT_MAX * clamp(y, -1.f, 1.f)), SHRT_MIN, SHRT_MAX);
+		_stateX360.sThumbLY = clamp(int(_stateX360.sThumbLY + SHRT_MAX * clamp(-y, -1.f, 1.f)), SHRT_MIN, SHRT_MAX);
 		
 	}
 	void setRightStick(float x, float y) override
 	{
 		_stateX360.sThumbRX = clamp(int(_stateX360.sThumbRX + SHRT_MAX * clamp(x, -1.f, 1.f)), SHRT_MIN, SHRT_MAX);
-		_stateX360.sThumbRY = clamp(int(_stateX360.sThumbRY + SHRT_MAX * clamp(y, -1.f, 1.f)), SHRT_MIN, SHRT_MAX);
+		_stateX360.sThumbRY = clamp(int(_stateX360.sThumbRY + SHRT_MAX * clamp(-y, -1.f, 1.f)), SHRT_MIN, SHRT_MAX);
 	}
 	void setLeftTrigger(float val) override
 	{

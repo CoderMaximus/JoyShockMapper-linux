@@ -189,6 +189,11 @@ public:
 	virtual int GetDeviceCount() = 0;
 	virtual int GetConnectedDeviceHandles(int* deviceHandleArray, int size) = 0;
 	virtual void DisconnectAndDisposeAll() = 0;
+	
+#ifdef __linux__
+	virtual void grabAllControllers() { } // Default no-op for non-Linux
+	virtual void ungrabAllControllers() { } // Default no-op for non-Linux
+#endif
 	virtual JOY_SHOCK_STATE GetSimpleState(int deviceId) = 0;
 	virtual IMU_STATE GetIMUState(int deviceId) = 0;
 	virtual MOTION_STATE GetMotionState(int deviceId) = 0;

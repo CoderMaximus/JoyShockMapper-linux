@@ -77,6 +77,67 @@ WORD nameToKey(string_view name)
 {
 	// https://msdn.microsoft.com/en-us/library/dd375731%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 	auto length = name.length();
+
+	// Handle KEY_ prefix for explicit keyboard keys
+	if (length > 4 && name.substr(0, 4) == "KEY_")
+	{
+		string_view keyName = name.substr(4);
+		// Try single letter keys first
+		if (keyName.length() == 1)
+		{
+			char c = keyName[0];
+			if (c >= 'A' && c <= 'Z')
+				return c - 'A' + 0x41;
+			if (c >= '0' && c <= '9')
+				return c - '0' + 0x30;
+		}
+		// Function keys
+		if (keyName.length() == 2 && keyName[0] == 'F')
+		{
+			if (keyName[1] >= '1' && keyName[1] <= '9')
+				return VK_F1 + (keyName[1] - '1');
+			if (keyName[0] == '1' && keyName[1] == '0')
+				return VK_F10;
+			if (keyName[0] == '1' && keyName[1] == '1')
+				return VK_F11;
+			if (keyName[0] == '1' && keyName[1] == '2')
+				return VK_F12;
+		}
+		if (keyName == "ESC") return VK_ESCAPE;
+		if (keyName == "TAB") return VK_TAB;
+		if (keyName == "CAPSLOCK") return VK_CAPITAL;
+		if (keyName == "LSHIFT") return VK_LSHIFT;
+		if (keyName == "RSHIFT") return VK_RSHIFT;
+		if (keyName == "LCTRL") return VK_LCONTROL;
+		if (keyName == "RCTRL") return VK_RCONTROL;
+		if (keyName == "LALT") return VK_LMENU;
+		if (keyName == "RALT") return VK_RMENU;
+		if (keyName == "SPACE") return VK_SPACE;
+		if (keyName == "ENTER") return VK_RETURN;
+		if (keyName == "BACKSPACE") return VK_BACK;
+		if (keyName == "INSERT") return VK_INSERT;
+		if (keyName == "DELETE") return VK_DELETE;
+		if (keyName == "HOME") return VK_HOME;
+		if (keyName == "END") return VK_END;
+		if (keyName == "PAGEUP") return VK_PRIOR;
+		if (keyName == "PAGEDOWN") return VK_NEXT;
+		if (keyName == "UP") return VK_UP;
+		if (keyName == "DOWN") return VK_DOWN;
+		if (keyName == "LEFT") return VK_LEFT;
+		if (keyName == "RIGHT") return VK_RIGHT;
+		if (keyName == "TILDE") return VK_OEM_3;
+		if (keyName == "MINUS") return VK_OEM_MINUS;
+		if (keyName == "EQUALS") return VK_OEM_PLUS;
+		if (keyName == "LEFTBRACKET") return VK_OEM_4;
+		if (keyName == "RIGHTBRACKET") return VK_OEM_6;
+		if (keyName == "BACKSLASH") return VK_OEM_5;
+		if (keyName == "SEMICOLON") return VK_OEM_1;
+		if (keyName == "QUOTE") return VK_OEM_7;
+		if (keyName == "COMMA") return VK_OEM_COMMA;
+		if (keyName == "PERIOD") return VK_OEM_PERIOD;
+		if (keyName == "SLASH") return VK_OEM_2;
+	}
+
 	if (length == 1)
 	{
 		// direct mapping to a number or character key

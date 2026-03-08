@@ -26,9 +26,9 @@ struct Command {
 #ifndef _WIN32
 extern int input_pipe_fd[2];
 
-extern std::queue<Command> commandQueue;
-extern std::mutex commandQueueMutex;
-extern std::condition_variable commandQueueCV;
+extern std::queue<Command>& commandQueue;
+extern std::mutex& commandQueueMutex;
+extern std::condition_variable& commandQueueCV;
 
 #endif
 
@@ -68,6 +68,10 @@ void initFifoCommandListener();
 tuple<string, string> GetActiveWindowName();
 
 vector<string> ListDirectory(string directory);
+
+#ifndef _WIN32
+void InitializeX11ErrorHandler();
+#endif
 
 string GetCWD();
 

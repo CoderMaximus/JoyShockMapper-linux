@@ -120,6 +120,63 @@ WORD nameToKey(string_view name)
 {
 	// https://msdn.microsoft.com/en-us/library/dd375731%28v=vs.85%29.aspx?f=255&MSPPError=-2147217396
 	auto length = name.length();
+
+	// Handle KEY_ prefix for explicit keyboard keys
+	if (length > 4 && name.substr(0, 4) == "KEY_")
+	{
+		string_view keyName = name.substr(4);
+		// Try single letter keys first
+		if (keyName.length() == 1)
+		{
+			char c = keyName[0];
+			if (c >= 'A' && c <= 'Z')
+				return c - 'A' + 0x41;
+			if (c >= '0' && c <= '9')
+				return c - '0' + 0x30;
+		}
+		// Function keys
+		if (keyName.length() == 2 && keyName[0] == 'F')
+		{
+			if (keyName[1] >= '1' && keyName[1] <= '9')
+				return 0x70 - 1 + (keyName[1] - '0'); // VK_F1
+			if (keyName == "F10") return 0x79;
+			if (keyName == "F11") return 0x7A;
+			if (keyName == "F12") return 0x7B;
+		}
+		if (keyName == "ESC") return 0x1B;
+		if (keyName == "TAB") return 0x09;
+		if (keyName == "CAPSLOCK") return 0x14;
+		if (keyName == "LSHIFT") return 0xA0;
+		if (keyName == "RSHIFT") return 0xA1;
+		if (keyName == "LCTRL") return 0xA2;
+		if (keyName == "RCTRL") return 0xA3;
+		if (keyName == "LALT") return 0xA4;
+		if (keyName == "RALT") return 0xA5;
+		if (keyName == "SPACE") return 0x20;
+		if (keyName == "ENTER") return 0x0D;
+		if (keyName == "BACKSPACE") return 0x08;
+		if (keyName == "INSERT") return 0x2D;
+		if (keyName == "DELETE") return 0x2E;
+		if (keyName == "HOME") return 0x24;
+		if (keyName == "END") return 0x23;
+		if (keyName == "PAGEUP") return 0x21;
+		if (keyName == "PAGEDOWN") return 0x22;
+		if (keyName == "UP") return 0x26;
+		if (keyName == "DOWN") return 0x28;
+		if (keyName == "LEFT") return 0x25;
+		if (keyName == "RIGHT") return 0x27;
+		if (keyName == "TILDE") return 0xC0;
+		if (keyName == "MINUS") return 0xBD;
+		if (keyName == "EQUALS") return 0xBB;
+		if (keyName == "LEFTBRACKET") return 0xDB;
+		if (keyName == "RIGHTBRACKET") return 0xDD;
+		if (keyName == "BACKSLASH") return 0xDC;
+		if (keyName == "SEMICOLON") return 0xBA;
+		if (keyName == "QUOTE") return 0xDE;
+		if (keyName == "COMMA") return 0xBC;
+		if (keyName == "PERIOD") return 0xBE;
+		if (keyName == "SLASH") return 0xBF;
+	}
 	if (length == 1)
 	{
 		// direct mapping to a number or character key
@@ -397,6 +454,148 @@ WORD nameToKey(string_view name)
 	if (name.compare("GYRO_OFF") == 0)
 	{
 		return GYRO_OFF_BIND;
+	}
+	// Xbox virtual controller buttons
+	if (name.compare("X_UP") == 0)
+	{
+		return X_UP;
+	}
+	if (name.compare("X_DOWN") == 0)
+	{
+		return X_DOWN;
+	}
+	if (name.compare("X_LEFT") == 0)
+	{
+		return X_LEFT;
+	}
+	if (name.compare("X_RIGHT") == 0)
+	{
+		return X_RIGHT;
+	}
+	if (name.compare("X_LB") == 0)
+	{
+		return X_LB;
+	}
+	if (name.compare("X_RB") == 0)
+	{
+		return X_RB;
+	}
+	if (name.compare("X_X") == 0)
+	{
+		return X_X;
+	}
+	if (name.compare("X_A") == 0)
+	{
+		return X_A;
+	}
+	if (name.compare("X_Y") == 0)
+	{
+		return X_Y;
+	}
+	if (name.compare("X_B") == 0)
+	{
+		return X_B;
+	}
+	if (name.compare("X_LS") == 0)
+	{
+		return X_LS;
+	}
+	if (name.compare("X_RS") == 0)
+	{
+		return X_RS;
+	}
+	if (name.compare("X_BACK") == 0)
+	{
+		return X_BACK;
+	}
+	if (name.compare("X_START") == 0)
+	{
+		return X_START;
+	}
+	if (name.compare("X_GUIDE") == 0)
+	{
+		return X_GUIDE;
+	}
+	if (name.compare("X_LT") == 0)
+	{
+		return X_LT;
+	}
+	if (name.compare("X_RT") == 0)
+	{
+		return X_RT;
+	}
+	// PlayStation virtual controller buttons (aliases)
+	if (name.compare("PS_UP") == 0)
+	{
+		return PS_UP;
+	}
+	if (name.compare("PS_DOWN") == 0)
+	{
+		return PS_DOWN;
+	}
+	if (name.compare("PS_LEFT") == 0)
+	{
+		return PS_LEFT;
+	}
+	if (name.compare("PS_RIGHT") == 0)
+	{
+		return PS_RIGHT;
+	}
+	if (name.compare("PS_L1") == 0)
+	{
+		return PS_L1;
+	}
+	if (name.compare("PS_R1") == 0)
+	{
+		return PS_R1;
+	}
+	if (name.compare("PS_SQUARE") == 0)
+	{
+		return PS_SQUARE;
+	}
+	if (name.compare("PS_CROSS") == 0)
+	{
+		return PS_CROSS;
+	}
+	if (name.compare("PS_TRIANGLE") == 0)
+	{
+		return PS_TRIANGLE;
+	}
+	if (name.compare("PS_CIRCLE") == 0)
+	{
+		return PS_CIRCLE;
+	}
+	if (name.compare("PS_L3") == 0)
+	{
+		return PS_L3;
+	}
+	if (name.compare("PS_R3") == 0)
+	{
+		return PS_R3;
+	}
+	if (name.compare("PS_SHARE") == 0)
+	{
+		return PS_SHARE;
+	}
+	if (name.compare("PS_OPTIONS") == 0)
+	{
+		return PS_OPTIONS;
+	}
+	if (name.compare("PS_HOME") == 0)
+	{
+		return PS_HOME;
+	}
+	if (name.compare("PS_PAD_CLICK") == 0)
+	{
+		return PS_PAD_CLICK;
+	}
+	if (name.compare("PS_L2") == 0)
+	{
+		return PS_L2;
+	}
+	if (name.compare("PS_R2") == 0)
+	{
+		return PS_R2;
 	}
 	return 0x00;
 }

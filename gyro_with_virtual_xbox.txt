@@ -1,0 +1,53 @@
+RESET_MAPPINGS
+
+# Enable virtual Xbox controller
+VIRTUAL_CONTROLLER = XBOX
+
+# Gyro settings - mapped to MOUSE for aiming
+MIN_GYRO_SENS = 1
+MAX_GYRO_SENS = 2
+MIN_GYRO_THRESHOLD = 0
+MAX_GYRO_THRESHOLD = 75
+AUTO_CALIBRATE_GYRO = OFF
+GYRO_OFF = CAPTURE
+
+# Stick settings
+STICK_SENS = 180
+STICK_POWER = 3
+STICK_ACCELERATION_RATE = 1
+STICK_ACCELERATION_CAP = 2
+
+# Gyro output to MOUSE for aiming (this is the default)
+GYRO_OUTPUT = MOUSE
+
+# Map sticks to virtual Xbox controller
+LEFT_STICK_MODE = LEFT_STICK
+RIGHT_STICK_MODE = RIGHT_STICK
+
+# Map all buttons to virtual Xbox controller
+# Face buttons
+S = X_A
+E = X_B
+W = KEY_F
+N = X_Y
+
+# Bumpers and triggers
+L = X_LB
+R = X_RB
+ZL = X_LT
+ZR = X_RT
+
+# D-pad
+UP = KEY_G
+DOWN = KEY_H
+LEFT = KEY_J
+RIGHT = KEY_K
+
+# Menu buttons
+- = X_BACK
++ = X_START
+HOME = X_GUIDE
+
+# Stick clicks
+L3 = X_LS
+R3 = KEY_L

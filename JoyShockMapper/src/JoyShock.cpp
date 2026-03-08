@@ -446,7 +446,7 @@ void JoyShock::handleButtonChange(ButtonID id, bool pressed, int touchpadID)
 		CERR << "Button " << id << " with tocuchpadId " << touchpadID << " could not be found\n";
 		return;
 	}
-	else if ((!_context->nn && pressed) || (_context->nn > 0 && (id >= ButtonID::UP || id <= ButtonID::DOWN || id == ButtonID::S || id == ButtonID::E) && nnm.find(_context->nn) != nnm.end() && nnm.find(_context->nn)->second == id))
+	else if ((!_context->nn && pressed) || (_context->nn > 0 && (id >= ButtonID::UP && id <= ButtonID::DOWN || id == ButtonID::S || id == ButtonID::E) && nnm.find(_context->nn) != nnm.end() && nnm.find(_context->nn)->second == id))
 	{
 		Pressed evt;
 		evt.time_now = _timeNow;
@@ -1549,7 +1549,7 @@ bool JoyShock::processGyroStick(float stickX, float stickY, float stickLength, S
 	if (stickVelocity > 0.f)
 	{
 		expectedX = stickX / stickLength * stickVelocity;
-		expectedY = -stickY / stickLength * stickVelocity;
+		expectedY = stickY / stickLength * stickVelocity;
 	}
 
 	if (gyroMatchesStickMode || forceOutput)
