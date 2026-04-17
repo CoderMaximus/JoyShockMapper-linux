@@ -45,3 +45,7 @@ First and foremost install the dependencies listed here: https://github.com/Elec
 • Build: `make` or `make -j$(nproc)` to utilize all CPU cores
 
 All done!, the app will be located in `JoyShockMapper-linux/build/JoyShockMapper` as `JoyShockMapper`
+
+# Acknowledgements
+
+I am new to C and C++, thus my code quality is somewhat bad, and was created with the help of AI as well, so if you see anything wrong or needs fixing, please submit a PR including the fix!
