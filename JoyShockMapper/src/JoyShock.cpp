@@ -1581,8 +1581,7 @@ bool JoyShock::processGyroStick(float stickX, float stickY, float stickLength, S
 		{
 			if (gyroInStickStrength == 0.f)
 			{
-				// hack to help with finding deadzones more quickly
-				_context->_vigemController->setStick(undeadzoneInner, 0.f, isLeft);
+				_context->_vigemController->setStick(0.f, 0.f, isLeft);
 			}
 			else
 			{

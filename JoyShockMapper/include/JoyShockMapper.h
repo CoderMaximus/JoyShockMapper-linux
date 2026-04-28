@@ -9,6 +9,9 @@
 #include <memory>
 #include <array>
 
+// Debug flag - enabled with --debug command line argument
+extern bool JSM_DEBUG;
+
 // This header file is meant to be included among all core JSM source files
 // And as such it should contain only constants, types and functions related to them
 

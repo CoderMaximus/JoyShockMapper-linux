@@ -43,6 +43,7 @@ std::mutex handle_to_joyshock_mutex;
 
 int input_pipe_fd[2];
 int triggerCalibrationStep = 0;
+bool JSM_DEBUG = false;
 
 struct TOUCH_POINT
 {
@@ -388,8 +389,7 @@ void joyShockPollCallback(int jcHandle, JOY_SHOCK_STATE state, JOY_SHOCK_STATE l
 	float inGravX, inGravY, inGravZ;
 	motion.GetGravity(inGravX, inGravY, inGravZ);
 
-	float inQuatW, inQuatX, inQuatY, inQuatZ;
-	motion.GetOrientation(inQuatW, inQuatX, inQuatY, inQuatZ);
+	// IMU data is fetched fresh inside the callback
 
 	//// These are for sanity checking sensor fusion against a simple complementary filter:
 	// float angle = sqrtf(inGyroX * inGyroX + inGyroY * inGyroY + inGyroZ * inGyroZ) * PI / 180.f * deltaTime;
@@ -424,6 +424,7 @@ void joyShockPollCallback(int jcHandle, JOY_SHOCK_STATE state, JOY_SHOCK_STATE l
 	bool leftAny = false;
 	bool rightAny = false;
 	bool motionAny = false;
+	// motionAny is always false - used for motion stick but never set to true
 
 	if (jc->set_neutral_quat)
 	{
@@ -897,11 +898,7 @@ void joyShockPollCallback(int jcHandle, JOY_SHOCK_STATE state, JOY_SHOCK_STATE l
 		Quat neutralQuat = Quat(jc->neutralQuatW, jc->neutralQuatX, jc->neutralQuatY, jc->neutralQuatZ);
 		Vec grav = Vec(inGravX, inGravY, inGravZ) * neutralQuat.Inverse();
 
-		float lastCalX = jc->_motionStick.lastX;
-		float lastCalY = jc->_motionStick.lastY;
-		// float lastCalX = jc->_motionStick.lastX;
-		// float lastCalY = jc->_motionStick.lastY;
-		//  use gravity vector deflection
+		// use gravity vector deflection
 		auto axisSign = jc->getSetting<AxisSignPair>(SettingID::MOTION_STICK_AXIS);
 		float calX = grav.x * float(axisSign.first);
 		float calY = -grav.z * float(axisSign.second);
@@ -2829,21 +2826,29 @@ int main(int argc, char *argv[])
 	COUT_BOLD << "Welcome to JoyShockMapper version " << version << "!\n";
 	// if (whitelister) COUT << "JoyShockMapper was successfully whitelisted!\n";
 	//  Threads need to be created before listeners
-	CmdRegistry commandRegistry;
+CmdRegistry commandRegistry;
 	initJsmSettings(&commandRegistry);
 
-	for (int i = argc - 1; i >= 0; --i)
+	for (int i = 1; i < argc; ++i)
 	{
-#if _WIN32
-		string arg(&argv[i][0], &argv[i][wcslen(argv[i])]);
-#else
-		string arg = string(argv[0]);
-#endif
-		if (filesystem::is_directory(filesystem::status(arg)) &&
-		  SettingsManager::getV<PathString>(SettingID::JSM_DIRECTORY)->set(arg).compare(arg) == 0)
+		string arg = argv[i];
+		if (arg == "--debug" || arg == "-d")
 		{
-			break;
+			JSM_DEBUG = true;
 		}
+		else if (filesystem::is_directory(filesystem::status(arg)))
+		{
+			SettingsManager::getV<PathString>(SettingID::JSM_DIRECTORY)->set(arg);
+		}
+		else if (filesystem::is_regular_file(filesystem::status(arg)))
+		{
+			commandRegistry.loadConfigFile(arg);
+		}
+	}
+
+	if (JSM_DEBUG)
+	{
+		COUT_INFO << "Debug mode enabled!\n";
 	}
 
 	if (autoLoadThread && autoLoadThread->isRunning())
